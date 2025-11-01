@@ -1,7 +1,48 @@
-# civradar/intel/config_manager.py
 """
-Field-Ready Configuration Management.
-Provides secure, dynamic configuration handling for field operations.
+Configuration Manager Module for CIVRADAR-X
+
+This module provides comprehensive configuration management capabilities for the
+CIVRADAR-X civilian radar intelligence system. It supports secure, dynamic
+configuration handling optimized for field operations across various threat
+environments and operational scenarios.
+
+Key Features:
+- Multi-level security configurations (Minimal to Extreme)
+- Field scenario adaptation (Normal, Stealth, Combat, Emergency, etc.)
+- Encrypted configuration storage with integrity verification
+- Dynamic configuration switching for operational needs
+- Thread-safe operations with comprehensive logging
+- Emergency configuration reset capabilities
+
+Security Levels:
+- MINIMAL: Basic functionality with minimal security
+- STANDARD: Balanced security/functionality (recommended default)
+- HIGH: Enhanced security with process hiding and network stealth
+- EXTREME: Maximum security with forensic protection
+- EMERGENCY: Crisis mode with minimal footprint
+
+Field Scenarios:
+- NORMAL: Standard operations with full features
+- STEALTH: Low-visibility operations with reduced activity
+- COMBAT: High-threat environments with restricted communications
+- EMERGENCY: Crisis situations with emergency protocols
+- OFFLINE: No network connectivity mode
+- URBAN/RURAL/MOBILE: Environment-specific optimizations
+
+Technical Implementation:
+- Uses dataclasses for type-safe configuration structures
+- Fernet encryption for secure storage (AES 128)
+- SHA256 checksums for integrity verification
+- SQLite-based configuration history (future enhancement)
+- Threading locks for concurrent access protection
+
+Dependencies:
+- cryptography: For encryption and key derivation
+- opsec_logger: For security event logging
+- pathlib: For cross-platform path handling
+
+Author: CIVRADAR-X Development Team
+License: MIT
 """
 
 import os
@@ -18,7 +59,7 @@ from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
-from .opsec_logger import get_opsec_logger, log_opsec_event
+from .opsec_logger import get_opsec_logger, log_opsec_logger
 
 class ConfigLevel(Enum):
     """Configuration levels based on security requirements."""
