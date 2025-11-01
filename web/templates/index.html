@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>CIVRADAR-X</title>
+  <link rel="stylesheet" href="/static/css/phantom.css">
+</head>
+<body>
+  <div id="radar-container"></div>
+  <div id="sidebar">
+    <div class="header">CIVRADAR-X • TACTICAL RECON</div>
+    <div id="device-list"></div>
+  </div>
+  <div id="timeline"></div>
+  <div id="controls">
+    <div id="mode-controls">
+      <button id="night-vision-btn" onclick="toggleNightVision()">Night Vision</button>
+      <button id="tactical-btn" onclick="toggleTactical()">Tactical</button>
+    </div>
+    <button onclick="exportData('csv')">CSV</button>
+    <button onclick="exportData('json')">JSON</button>
+    <button onclick="exportData('geojson')">GeoJSON</button>
+    <span id="gps-status">GPS: —</span>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="/static/js/radar.js"></script>
+</body>
+</html>

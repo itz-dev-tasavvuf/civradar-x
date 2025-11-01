@@ -1,0 +1,66 @@
+body {
+  margin: 0; background: #000; color: #0f0;
+  font-family: 'Courier New', monospace;
+  overflow: hidden;
+  transition: filter 0.3s ease;
+}
+body.night-vision {
+  filter: hue-rotate(90deg) brightness(1.2) contrast(1.5);
+}
+body.tactical {
+  background: linear-gradient(45deg, #000 25%, #001 25%, #001 50%, #000 50%, #000 75%, #001 75%);
+  background-size: 20px 20px;
+}
+#radar-container {
+  position: absolute; top: 0; left: 0;
+  width: 100vw; height: 100vh;
+}
+#sidebar {
+  position: absolute; top: 0; right: 0;
+  width: 300px; height: 100vh;
+  background: rgba(0,10,0,0.7);
+  padding: 10px; overflow-y: auto;
+  border-left: 2px solid #0f0;
+}
+.header { font-size: 14px; color: #0ff; margin-bottom: 10px; }
+.device-item {
+  padding: 6px 0; border-bottom: 1px solid #050;
+  color: #0f0;
+  transition: all 0.2s ease;
+}
+.device-item:hover {
+  background: rgba(0, 255, 0, 0.1);
+}
+.device-item.risk-3 { color: #ff0; }
+.device-item.risk-4 { color: #f80; }
+.device-item.risk-5 { color: #f00; animation: pulse 1s infinite; }
+@keyframes pulse {
+  0% { opacity: 1; }
+  50% { opacity: 0.5; }
+  100% { opacity: 1; }
+}
+#controls {
+  position: absolute; bottom: 10px; left: 10px;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+#controls button {
+  background: #030; color: #0f0; border: 1px solid #0a0;
+  margin-right: 5px; cursor: pointer;
+  padding: 5px 10px;
+  transition: all 0.2s ease;
+}
+#controls button:hover {
+  background: #0a0;
+}
+#controls button.active {
+  background: #0f0;
+  color: #000;
+}
+#mode-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}

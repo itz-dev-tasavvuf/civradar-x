@@ -1,0 +1,693 @@
+# civradar/intel/secure_sharing.py
+"""
+Secure Sharing Protocols with Multiple Encryption Options.
+Provides secure data sharing methods for field operations with various encryption schemes.
+"""
+
+import os
+import json
+import time
+import base64
+import tempfile
+import shutil
+import subprocess
+import hashlib
+import secrets
+from typing import Dict, List, Optional, Any, Union
+from dataclasses import dataclass, asdict
+from enum import Enum
+from pathlib import Path
+from cryptography.fernet import Fernet
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+from cryptography.hazmat.primitives.asymmetric import rsa, padding
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+import gzip
+import io
+
+from .opsec_logger import get_opsec_logger, log_opsec_event
+
+class EncryptionType(Enum):
+    """Supported encryption types for secure sharing."""
+    FERNET = "fernet"           # Symmetric Fernet encryption
+    AES_256_GCM = "aes256_gcm"  # AES-256-GCM authenticated encryption
+    RSA = "rsa"                 # Asymmetric RSA encryption
+    HYBRID = "hybrid"           # Hybrid RSA+AES encryption
+    CUSTOM = "custom"           # Custom encryption scheme
+
+@dataclass
+class SharingConfig:
+    """Configuration for secure sharing protocols."""
+    encryption_type: EncryptionType = EncryptionType.FERNET
+    compression: bool = True
+    key_derivation_iterations: int = 100000
+    max_file_size: int = 100 * 1024 * 1024  # 100MB
+    expiry_time: int = 3600  # 1 hour
+    requires_verification: bool = True
+    multiple_recipients: bool = True
+    self_destruct: bool = False
+    watermarking: bool = False
+
+@dataclass
+class ShareMetadata:
+    """Metadata for shared files."""
+    file_id: str
+    encryption_type: str
+    original_filename: str
+    file_size: int
+    created_at: float
+    expires_at: float
+    recipient_count: int
+    verification_hash: str
+    compression_used: bool
+    watermark: Optional[str] = None
+
+class SecureSharingManager:
+    """
+    Manager for secure sharing protocols with multiple encryption options.
+    """
+    
+    def __init__(self, config: SharingConfig = None, storage_path: str = None):
+        self.config = config or SharingConfig()
+        self.storage_path = Path(storage_path or "/tmp/.civradar_shares")
+        self.storage_path.mkdir(parents=True, exist_ok=True)
+        
+        # Generate or load RSA keys for asymmetric operations
+        self._init_rsa_keys()
+        
+        self.active_shares: Dict[str, ShareMetadata] = {}
+        self._lock_manager()
+        
+        log_opsec_event("secure_sharing_initialized", {
+            "encryption_type": self.config.encryption_type.value,
+            "compression": self.config.compression,
+            "storage_path": str(self.storage_path)
+        }, "normal", 2)
+    
+    def _lock_manager(self):
+        """Lock sharing manager for exclusive access."""
+        # In a real implementation, this would use file locking or similar
+        pass
+    
+    def _init_rsa_keys(self):
+        """Initialize RSA key pair for asymmetric operations."""
+        try:
+            # Try to load existing keys
+            private_key_path = self.storage_path / "private_key.pem"
+            public_key_path = self.storage_path / "public_key.pem"
+            
+            if private_key_path.exists() and public_key_path.exists():
+                with open(private_key_path, 'rb') as f:
+                    self.private_key = serialization.load_pem_private_key(
+                        f.read(), password=None
+                    )
+                with open(public_key_path, 'rb') as f:
+                    self.public_key = serialization.load_pem_public_key(f.read())
+            else:
+                # Generate new key pair
+                self.private_key = rsa.generate_private_key(
+                    public_exponent=65537,
+                    key_size=4096
+                )
+                self.public_key = self.private_key.public_key()
+                
+                # Save keys
+                with open(private_key_path, 'wb') as f:
+                    f.write(self.private_key.private_bytes(
+                        encoding=serialization.Encoding.PEM,
+                        format=serialization.PrivateFormat.PKCS8,
+                        encryption_algorithm=serialization.NoEncryption()
+                    ))
+                
+                with open(public_key_path, 'wb') as f:
+                    f.write(self.public_key.public_bytes(
+                        encoding=serialization.Encoding.PEM,
+                        format=serialization.PublicFormat.SubjectPublicKeyInfo
+                    ))
+                    
+                # Apply strict permissions
+                os.chmod(private_key_path, 0o600)
+                os.chmod(public_key_path, 0o644)
+                
+        except Exception as e:
+            log_opsec_event("rsa_key_init_error", {"error": str(e)}, "normal", 5)
+            # Generate ephemeral keys if loading fails
+            self.private_key = rsa.generate_private_key(
+                public_exponent=65537,
+                key_size=2048
+            )
+            self.public_key = self.private_key.public_key()
+    
+    def create_share(self, data: Union[bytes, str], 
+                    recipients: List[str] = None,
+                    filename: str = None,
+                    custom_config: Dict[str, Any] = None) -> Dict[str, Any]:
+        """
+        Create secure share with specified encryption.
+        
+        Args:
+            data: Data to share (bytes or string)
+            recipients: List of recipient identifiers
+            filename: Original filename
+            custom_config: Custom configuration override
+            
+        Returns:
+            Dictionary containing share information and access details
+        """
+        try:
+            # Apply custom config if provided
+            if custom_config:
+                config = SharingConfig(**{**asdict(self.config), **custom_config})
+            else:
+                config = self.config
+            
+            # Convert string to bytes if needed
+            if isinstance(data, str):
+                data = data.encode('utf-8')
+            
+            # Check file size
+            if len(data) > config.max_file_size:
+                raise ValueError(f"File too large: {len(data)} bytes > {config.max_file_size} bytes")
+            
+            # Generate share ID
+            share_id = secrets.token_urlsafe(32)
+            
+            # Apply compression if enabled
+            if config.compression:
+                compressed_data = gzip.compress(data)
+                if len(compressed_data) < len(data):
+                    data = compressed_data
+                    compression_used = True
+                else:
+                    compression_used = False
+            else:
+                compression_used = False
+            
+            # Encrypt data according to encryption type
+            encrypted_data, encryption_metadata = self._encrypt_data(
+                data, config.encryption_type, recipients or []
+            )
+            
+            # Create share metadata
+            now = time.time()
+            expires_at = now + config.expiry_time
+            
+            metadata = ShareMetadata(
+                file_id=share_id,
+                encryption_type=config.encryption_type.value,
+                original_filename=filename or "secure_share",
+                file_size=len(encrypted_data),
+                created_at=now,
+                expires_at=expires_at,
+                recipient_count=len(recipients or []),
+                verification_hash=hashlib.sha256(encrypted_data).hexdigest(),
+                compression_used=compression_used,
+                watermark=self._add_watermark(config.watermarking)
+            )
+            
+            # Store encrypted data
+            share_file = self.storage_path / f"{share_id}.share"
+            with open(share_file, 'wb') as f:
+                f.write(encrypted_data)
+            
+            # Store metadata
+            metadata_file = self.storage_path / f"{share_id}.meta"
+            with open(metadata_file, 'w') as f:
+                json.dump({
+                    **asdict(metadata),
+                    'encryption_metadata': encryption_metadata
+                }, f, indent=2)
+            
+            # Store in active shares
+            self.active_shares[share_id] = metadata
+            
+            log_opsec_event("secure_share_created", {
+                "share_id": share_id[:8] + "...",  # Partial ID for security
+                "encryption_type": config.encryption_type.value,
+                "file_size": len(encrypted_data),
+                "recipient_count": len(recipients or []),
+                "compression_used": compression_used
+            }, "normal", 3)
+            
+            return {
+                "share_id": share_id,
+                "access_key": self._generate_access_key(share_id),
+                "expires_at": expires_at,
+                "encryption_type": config.encryption_type.value,
+                "file_info": {
+                    "original_filename": metadata.original_filename,
+                    "file_size": len(encrypted_data),
+                    "compression_used": compression_used
+                },
+                "recipients": recipients or [],
+                "verification_hash": metadata.verification_hash
+            }
+            
+        except Exception as e:
+            log_opsec_event("secure_share_error", {"error": str(e)}, "normal", 7)
+            raise
+    
+    def _encrypt_data(self, data: bytes, encryption_type: EncryptionType, 
+                     recipients: List[str]) -> tuple[bytes, Dict[str, Any]]:
+        """Encrypt data using specified encryption type."""
+        
+        if encryption_type == EncryptionType.FERNET:
+            return self._encrypt_fernet(data)
+        elif encryption_type == EncryptionType.AES_256_GCM:
+            return self._encrypt_aes256_gcm(data)
+        elif encryption_type == EncryptionType.RSA:
+            return self._encrypt_rsa(data, recipients)
+        elif encryption_type == EncryptionType.HYBRID:
+            return self._encrypt_hybrid(data, recipients)
+        else:
+            raise ValueError(f"Unsupported encryption type: {encryption_type}")
+    
+    def _encrypt_fernet(self, data: bytes) -> tuple[bytes, Dict[str, Any]]:
+        """Encrypt using Fernet (symmetric)."""
+        # Generate key from password or random
+        key = Fernet.generate_key()
+        fernet = Fernet(key)
+        
+        encrypted_data = fernet.encrypt(data)
+        
+        metadata = {
+            "key": base64.urlsafe_b64encode(key).decode(),
+            "algorithm": "Fernet"
+        }
+        
+        return encrypted_data, metadata
+    
+    def _encrypt_aes256_gcm(self, data: bytes) -> tuple[bytes, Dict[str, Any]]:
+        """Encrypt using AES-256-GCM."""
+        # Generate random key and IV
+        key = secrets.token_bytes(32)  # 256-bit key
+        iv = secrets.token_bytes(12)   # 96-bit IV for GCM
+        
+        # Create cipher
+        cipher = Cipher(algorithms.AES(key), modes.GCM(iv))
+        encryptor = cipher.encryptor()
+        
+        # Encrypt data
+        encrypted_data = encryptor.update(data) + encryptor.finalize()
+        
+        # Get authentication tag
+        auth_tag = encryptor.tag
+        
+        metadata = {
+            "key": base64.urlsafe_b64encode(key).decode(),
+            "iv": base64.urlsafe_b64encode(iv).decode(),
+            "auth_tag": base64.urlsafe_b64encode(auth_tag).decode(),
+            "algorithm": "AES-256-GCM"
+        }
+        
+        return encrypted_data + auth_tag, metadata
+    
+    def _encrypt_rsa(self, data: bytes, recipients: List[str]) -> tuple[bytes, Dict[str, Any]]:
+        """Encrypt using RSA (asymmetric)."""
+        if not recipients:
+            # Use own public key if no recipients specified
+            recipients = ["self"]
+        
+        encrypted_parts = []
+        
+        # Encrypt with each recipient's key (simplified - would need recipient key management)
+        for recipient in recipients:
+            if recipient == "self":
+                # Use own public key
+                public_key = self.public_key
+            else:
+                # In real implementation, would fetch recipient's public key
+                public_key = self.public_key  # Placeholder
+            
+            # Encrypt data in chunks (RSA has size limits)
+            chunk_size = 190  # For 2048-bit key
+            encrypted_chunks = []
+            
+            for i in range(0, len(data), chunk_size):
+                chunk = data[i:i + chunk_size]
+                encrypted_chunk = public_key.encrypt(
+                    chunk,
+                    padding.OAEP(
+                        mgf=padding.MGF1(algorithm=hashes.SHA256()),
+                        algorithm=hashes.SHA256(),
+                        label=None
+                    )
+                )
+                encrypted_chunks.append(encrypted_chunk)
+            
+            encrypted_parts.append({
+                "recipient": recipient,
+                "chunks": [base64.urlsafe_b64encode(chunk).decode() for chunk in encrypted_chunks]
+            })
+        
+        # Combine all encrypted parts
+        all_encrypted = json.dumps(encrypted_parts).encode()
+        
+        metadata = {
+            "recipients": recipients,
+            "algorithm": "RSA-2048-OAEP",
+            "chunk_size": chunk_size
+        }
+        
+        return all_encrypted, metadata
+    
+    def _encrypt_hybrid(self, data: bytes, recipients: List[str]) -> tuple[bytes, Dict[str, Any]]:
+        """Encrypt using hybrid RSA+AES approach."""
+        # Generate random AES key
+        aes_key = secrets.token_bytes(32)
+        
+        # Encrypt data with AES-256-GCM
+        cipher = Cipher(algorithms.AES(aes_key), modes.GCM(secrets.token_bytes(12)))
+        encryptor = cipher.encryptor()
+        encrypted_data = encryptor.update(data) + encryptor.finalize()
+        auth_tag = encryptor.tag
+        
+        # Encrypt AES key with RSA for each recipient
+        encrypted_keys = {}
+        for recipient in recipients:
+            if recipient == "self":
+                public_key = self.public_key
+            else:
+                public_key = self.public_key  # Placeholder
+            
+            encrypted_key = public_key.encrypt(
+                aes_key,
+                padding.OAEP(
+                    mgf=padding.MGF1(algorithm=hashes.SHA256()),
+                    algorithm=hashes.SHA256(),
+                    label=None
+                )
+            )
+            encrypted_keys[recipient] = base64.urlsafe_b64encode(encrypted_key).decode()
+        
+        # Combine encrypted data and encrypted keys
+        encrypted_package = {
+            "encrypted_data": base64.urlsafe_b64encode(encrypted_data + auth_tag).decode(),
+            "encrypted_keys": encrypted_keys,
+            "algorithm": "Hybrid RSA-AES"
+        }
+        
+        return json.dumps(encrypted_package).encode(), {
+            "recipients": recipients,
+            "aes_key_encrypted": True,
+            "data_encrypted": True
+        }
+    
+    def _generate_access_key(self, share_id: str) -> str:
+        """Generate access key for share retrieval."""
+        # Combine share ID with secret for access key
+        secret = secrets.token_bytes(32)
+        key_material = f"{share_id}:{secret.hex()}".encode()
+        
+        # Generate HMAC-based access key
+        access_key = hashlib.sha256(key_material).hexdigest()[:32]
+        
+        # Store secret for verification
+        secret_file = self.storage_path / f"{share_id}.secret"
+        secret_file.write_text(secret.hex())
+        os.chmod(secret_file, 0o600)
+        
+        return access_key
+    
+    def _add_watermark(self, watermarking: bool) -> Optional[str]:
+        """Add watermark if enabled."""
+        if not watermarking:
+            return None
+        
+        # Generate simple watermark
+        watermark_data = {
+            "timestamp": time.time(),
+            "signature": secrets.token_hex(16),
+            "version": "1.0"
+        }
+        
+        return base64.urlsafe_b64encode(
+            json.dumps(watermark_data).encode()
+        ).decode()
+    
+    def retrieve_share(self, share_id: str, access_key: str, 
+                      recipient: str = None) -> Optional[bytes]:
+        """
+        Retrieve and decrypt shared data.
+        
+        Args:
+            share_id: Share identifier
+            access_key: Access key for verification
+            recipient: Recipient identifier (for asymmetric encryption)
+            
+        Returns:
+            Decrypted data or None if retrieval fails
+        """
+        try:
+            # Verify share exists and is not expired
+            metadata_file = self.storage_path / f"{share_id}.meta"
+            share_file = self.storage_path / f"{share_id}.share"
+            
+            if not metadata_file.exists() or not share_file.exists():
+                return None
+            
+            with open(metadata_file, 'r') as f:
+                metadata_dict = json.load(f)
+            
+            metadata = ShareMetadata(**{k: v for k, v in metadata_dict.items() 
+                                      if k != 'encryption_metadata'})
+            encryption_metadata = metadata_dict.get('encryption_metadata', {})
+            
+            # Check expiration
+            if time.time() > metadata.expires_at:
+                log_opsec_event("share_expired", {"share_id": share_id}, "normal", 3)
+                return None
+            
+            # Verify access key
+            secret_file = self.storage_path / f"{share_id}.secret"
+            if not secret_file.exists():
+                return None
+            
+            expected_key = self._generate_access_key(share_id)
+            if access_key != expected_key:
+                log_opsec_event("invalid_access_key", {"share_id": share_id}, "normal", 6)
+                return None
+            
+            # Load encrypted data
+            with open(share_file, 'rb') as f:
+                encrypted_data = f.read()
+            
+            # Decrypt data
+            decrypted_data = self._decrypt_data(
+                encrypted_data, 
+                EncryptionType(metadata.encryption_type),
+                encryption_metadata,
+                recipient or "self"
+            )
+            
+            # Handle compression
+            if metadata.compression_used:
+                try:
+                    decrypted_data = gzip.decompress(decrypted_data)
+                except:
+                    pass  # Try without decompression
+            
+            log_opsec_event("share_retrieved", {
+                "share_id": share_id[:8] + "...",
+                "encryption_type": metadata.encryption_type,
+                "recipient": recipient
+            }, "normal", 3)
+            
+            return decrypted_data
+            
+        except Exception as e:
+            log_opsec_event("share_retrieval_error", {
+                "share_id": share_id,
+                "error": str(e)
+            }, "normal", 7)
+            return None
+    
+    def _decrypt_data(self, encrypted_data: bytes, encryption_type: EncryptionType,
+                     encryption_metadata: Dict[str, Any], recipient: str) -> bytes:
+        """Decrypt data using specified encryption type."""
+        
+        if encryption_type == EncryptionType.FERNET:
+            return self._decrypt_fernet(encrypted_data, encryption_metadata)
+        elif encryption_type == EncryptionType.AES_256_GCM:
+            return self._decrypt_aes256_gcm(encrypted_data, encryption_metadata)
+        elif encryption_type == EncryptionType.RSA:
+            return self._decrypt_rsa(encrypted_data, encryption_metadata, recipient)
+        elif encryption_type == EncryptionType.HYBRID:
+            return self._decrypt_hybrid(encrypted_data, encryption_metadata, recipient)
+        else:
+            raise ValueError(f"Unsupported encryption type: {encryption_type}")
+    
+    def _decrypt_fernet(self, encrypted_data: bytes, metadata: Dict[str, Any]) -> bytes:
+        """Decrypt Fernet encrypted data."""
+        key = base64.urlsafe_b64decode(metadata["key"])
+        fernet = Fernet(key)
+        return fernet.decrypt(encrypted_data)
+    
+    def _decrypt_aes256_gcm(self, encrypted_data: bytes, metadata: Dict[str, Any]) -> bytes:
+        """Decrypt AES-256-GCM encrypted data."""
+        key = base64.urlsafe_b64decode(metadata["key"])
+        iv = base64.urlsafe_b64decode(metadata["iv"])
+        auth_tag = base64.urlsafe_b64decode(metadata["auth_tag"])
+        
+        # Split encrypted data and auth tag
+        actual_data = encrypted_data[:-len(auth_tag)]
+        
+        cipher = Cipher(algorithms.AES(key), modes.GCM(iv, auth_tag))
+        decryptor = cipher.decryptor()
+        return decryptor.update(actual_data) + decryptor.finalize()
+    
+    def _decrypt_rsa(self, encrypted_data: bytes, metadata: Dict[str, Any], 
+                    recipient: str) -> bytes:
+        """Decrypt RSA encrypted data."""
+        encrypted_parts = json.loads(encrypted_data.decode())
+        
+        # Find data for this recipient
+        recipient_data = None
+        for part in encrypted_parts:
+            if part["recipient"] == recipient:
+                recipient_data = part
+                break
+        
+        if not recipient_data:
+            raise ValueError(f"No data found for recipient {recipient}")
+        
+        # Decrypt each chunk
+        decrypted_chunks = []
+        for chunk_b64 in recipient_data["chunks"]:
+            chunk = base64.urlsafe_b64decode(chunk_b64)
+            decrypted_chunk = self.private_key.decrypt(
+                chunk,
+                padding.OAEP(
+                    mgf=padding.MGF1(algorithm=hashes.SHA256()),
+                    algorithm=hashes.SHA256(),
+                    label=None
+                )
+            )
+            decrypted_chunks.append(decrypted_chunk)
+        
+        return b''.join(decrypted_chunks)
+    
+    def _decrypt_hybrid(self, encrypted_data: bytes, metadata: Dict[str, Any], 
+                       recipient: str) -> bytes:
+        """Decrypt hybrid RSA+AES encrypted data."""
+        encrypted_package = json.loads(encrypted_data.decode())
+        
+        # Get encrypted AES key for this recipient
+        if recipient not in encrypted_package["encrypted_keys"]:
+            raise ValueError(f"No key found for recipient {recipient}")
+        
+        encrypted_aes_key = base64.urlsafe_b64decode(
+            encrypted_package["encrypted_keys"][recipient]
+        )
+        
+        # Decrypt AES key
+        aes_key = self.private_key.decrypt(
+            encrypted_aes_key,
+            padding.OAEP(
+                mgf=padding.MGF1(algorithm=hashes.SHA256()),
+                algorithm=hashes.SHA256(),
+                label=None
+            )
+        )
+        
+        # Decrypt data with AES key
+        encrypted_data_with_tag = base64.urlsafe_b64decode(
+            encrypted_package["encrypted_data"]
+        )
+        
+        # Extract auth tag (last 16 bytes)
+        auth_tag = encrypted_data_with_tag[-16:]
+        actual_data = encrypted_data_with_tag[:-16]
+        
+        cipher = Cipher(algorithms.AES(aes_key), modes.GCM(secrets.token_bytes(12), auth_tag))
+        decryptor = cipher.decryptor()
+        return decryptor.update(actual_data) + decryptor.finalize()
+    
+    def revoke_share(self, share_id: str):
+        """Revoke access to a share."""
+        try:
+            # Remove files
+            for ext in ['.share', '.meta', '.secret']:
+                file_path = self.storage_path / f"{share_id}{ext}"
+                if file_path.exists():
+                    file_path.unlink()
+            
+            # Remove from active shares
+            if share_id in self.active_shares:
+                del self.active_shares[share_id]
+            
+            log_opsec_event("share_revoked", {"share_id": share_id}, "normal", 4)
+            
+        except Exception as e:
+            log_opsec_event("share_revoke_error", {
+                "share_id": share_id,
+                "error": str(e)
+            }, "normal", 6)
+    
+    def cleanup_expired_shares(self):
+        """Clean up expired shares."""
+        current_time = time.time()
+        expired_shares = []
+        
+        for share_id, metadata in self.active_shares.items():
+            if current_time > metadata.expires_at:
+                expired_shares.append(share_id)
+        
+        for share_id in expired_shares:
+            self.revoke_share(share_id)
+        
+        if expired_shares:
+            log_opsec_event("expired_shares_cleaned", {
+                "count": len(expired_shares)
+            }, "normal", 2)
+    
+    def get_shares_status(self) -> Dict[str, Any]:
+        """Get status of all active shares."""
+        current_time = time.time()
+        
+        active_count = sum(1 for m in self.active_shares.values() 
+                          if current_time <= m.expires_at)
+        expired_count = len(self.active_shares) - active_count
+        
+        return {
+            "total_shares": len(self.active_shares),
+            "active_shares": active_count,
+            "expired_shares": expired_count,
+            "storage_path": str(self.storage_path),
+            "encryption_types": list(set(m.encryption_type for m in self.active_shares.values())),
+            "config": asdict(self.config)
+        }
+
+
+# Global secure sharing manager instance
+_secure_sharing = None
+
+def get_secure_sharing_manager(config: SharingConfig = None) -> SecureSharingManager:
+    """Get global secure sharing manager instance."""
+    global _secure_sharing
+    if _secure_sharing is None:
+        _secure_sharing = SecureSharingManager(config)
+    return _secure_sharing
+
+
+def create_secure_share(data: Union[bytes, str], 
+                       recipients: List[str] = None,
+                       encryption_type: EncryptionType = EncryptionType.FERNET,
+                       filename: str = None) -> Dict[str, Any]:
+    """Create secure share with specified parameters."""
+    config = SharingConfig(encryption_type=encryption_type)
+    manager = get_secure_sharing_manager(config)
+    return manager.create_share(data, recipients, filename)
+
+
+def retrieve_secure_share(share_id: str, access_key: str, 
+                         recipient: str = None) -> Optional[bytes]:
+    """Retrieve secure share."""
+    manager = get_secure_sharing_manager()
+    return manager.retrieve_share(share_id, access_key, recipient)
+
+
+def revoke_secure_share(share_id: str):
+    """Revoke secure share."""
+    manager = get_secure_sharing_manager()
+    manager.revoke_share(share_id)
