@@ -1,7 +1,46 @@
 # civradar/intel/opsec_logger.py
 """
-Operational Security (OPSEC) Logger with encrypted storage and anti-forensics capabilities.
-Designed for field operations in hostile environments with secure deletion and tamper protection.
+Operational Security (OPSEC) Logger Module for CIVRADAR-X
+
+This module provides encrypted, tamper-resistant logging capabilities specifically
+designed for field operations in hostile environments. It implements comprehensive
+anti-forensics measures to protect operational security while maintaining detailed
+audit trails for intelligence analysis.
+
+Key Features:
+- Encrypted log storage using Fernet (AES 128)
+- Tamper detection via HMAC signatures
+- Anti-forensics measures (time stomping, decoy files, fake activity)
+- Session-based logging with integrity verification
+- Secure deletion with multiple overwrite passes
+- Emergency wipe capabilities for crisis situations
+
+Security Levels:
+- MINIMAL: Basic encryption with minimal anti-forensics
+- STANDARD: Full encryption with standard anti-forensics
+- HIGH: Enhanced security with decoy files and fake activity
+- EXTREME: Maximum security with network camouflage and stealth processes
+
+Anti-Forensics Measures:
+- Time stomping: Randomizes file timestamps to obscure creation patterns
+- Decoy files: Creates realistic but fake files to confuse analysis
+- Fake activity: Generates background noise to mask real operations
+- Random filenames: Uses cryptographically secure random naming
+- Memory protection: Clears sensitive data from memory
+
+Database Schema:
+- opsec_events: Encrypted log entries with tamper detection
+- session_tracking: Session metadata and statistics
+
+Technical Implementation:
+- SQLite database with encrypted storage
+- Fernet encryption with PBKDF2 key derivation
+- HMAC-SHA256 for integrity verification
+- Thread-safe operations with locking
+- Automatic session management and cleanup
+
+Author: CIVRADAR-X Development Team
+License: MIT (Classified Operations)
 """
 
 import sqlite3

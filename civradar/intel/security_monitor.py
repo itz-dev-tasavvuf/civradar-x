@@ -1,7 +1,59 @@
-# civradar/intel/security_monitor.py
 """
-Security Monitoring and Alerting System.
-Provides comprehensive security breach detection and alerting for field operations.
+Security Monitor Module for CIVRADAR-X
+
+This module implements comprehensive security monitoring and alerting capabilities
+for the CIVRADAR-X system. It provides real-time threat detection, behavioral
+analysis, and automated response mechanisms designed for field operations in
+hostile environments.
+
+Key Features:
+- Multi-threaded security monitoring across system components
+- Threat signature-based detection for known attack patterns
+- Behavioral anomaly detection with statistical analysis
+- Automated alert escalation and response mechanisms
+- Multiple notification channels (local, email, sound)
+- Configurable security levels and response policies
+- Integration with OPSEC logging for audit trails
+
+Alert Categories:
+- SECURITY_BREACH: Direct security violations and breaches
+- THREAT_DETECTION: Identified threat patterns and indicators
+- SYSTEM_COMPROMISE: System integrity and compromise events
+- NETWORK_ANOMALY: Unusual network activity and connections
+- BEHAVIORAL_ANOMALY: Statistical deviations from normal behavior
+- CONFIGURATION_CHANGE: Unauthorized configuration modifications
+- WIPE_OPERATION: Data sanitization and secure deletion events
+- ENCRYPTION_FAILURE: Cryptographic operation failures
+
+Alert Severities:
+- INFO: Informational events requiring awareness
+- LOW: Minor security events with limited impact
+- MEDIUM: Moderate security concerns requiring attention
+- HIGH: Significant security threats requiring action
+- CRITICAL: Critical security breaches requiring immediate response
+- EMERGENCY: Emergency situations requiring immediate evacuation/action
+
+Automated Responses:
+- Emergency wipe for critical/emergency alerts
+- Stealth mode activation for high-severity threats
+- Configuration lockdown and access restrictions
+- Alert escalation with increased monitoring
+
+Technical Implementation:
+- SQLite-based alert storage with retention policies
+- Email notifications via SMTP with TLS support
+- Rate limiting to prevent alert flooding
+- Thread-safe operations with proper locking
+- Statistical analysis for behavioral anomaly detection
+
+Performance Considerations:
+- Configurable monitoring intervals to balance security and performance
+- Background thread operations to minimize impact on main functionality
+- Alert deduplication and rate limiting
+- Efficient database queries with proper indexing
+
+Author: CIVRADAR-X Development Team
+License: MIT (Classified Operations)
 """
 
 import os

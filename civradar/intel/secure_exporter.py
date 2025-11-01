@@ -1,4 +1,51 @@
-# civradar/intel/secure_exporter.py
+"""
+Secure Exporter Module for CIVRADAR-X
+
+This module provides secure data export capabilities with optional encryption
+for the CIVRADAR-X system. It creates comprehensive ZIP archives containing
+all export formats and supports both password-based and key-based encryption
+using GPG for secure data sharing.
+
+Key Features:
+- Multi-format export packaging (CSV, JSON, GeoJSON, SQLite)
+- GPG encryption support (password and key-based)
+- Comprehensive metadata inclusion
+- Secure temporary file handling
+- Export activity logging and tracking
+- Flask Response integration for web delivery
+
+Export Formats:
+- CSV: Spreadsheet-compatible tabular data
+- JSON: Structured data for programmatic processing
+- GeoJSON: Geospatial features for mapping applications
+- SQLite: Complete database copy for analysis
+
+Encryption Options:
+- Password-based: Symmetric encryption with user password
+- Key-based: Asymmetric encryption with GPG keys
+- No encryption: Plain ZIP archive for trusted environments
+
+Security Considerations:
+- Temporary files are properly cleaned up
+- Encryption keys are not stored or cached
+- Export activities are logged for audit trails
+- File paths and metadata are sanitized
+
+Dependencies:
+- zipfile: For ZIP archive creation
+- subprocess: For GPG command execution
+- flask: For HTTP response generation
+- tempfile: For secure temporary file handling
+
+Performance Notes:
+- Large datasets may require significant memory
+- GPG operations add processing overhead
+- Temporary files are created in system temp directory
+
+Author: CIVRADAR-X Development Team
+License: MIT (Classified Operations)
+"""
+
 import zipfile
 import io
 import json

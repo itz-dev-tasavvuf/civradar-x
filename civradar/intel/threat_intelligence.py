@@ -1,9 +1,57 @@
+"""
+Threat Intelligence Module for CIVRADAR-X
+
+This module provides comprehensive threat intelligence capabilities for the
+CIVRADAR-X system, including device risk assessment, vendor reputation scoring,
+and dynamic threat evaluation. It integrates with the IoT signatures database
+to provide context-aware security analysis.
+
+Key Features:
+- Dynamic risk scoring based on device characteristics
+- Vendor reputation assessment (1-5 scale, lower is better)
+- Protocol-specific risk multipliers
+- IoT device signature matching
+- Confidence-based risk adjustments
+- Real-time threat intelligence integration
+
+Risk Scoring Factors:
+- Device capabilities (camera, microphone, cloud connectivity)
+- Vendor reputation and security track record
+- Protocol security characteristics
+- Device classification and intended use
+- Privacy and security flags from signatures
+
+Vendor Reputation Scale:
+- 1: Excellent security track record
+- 2: Good security practices
+- 3: Average/unknown security posture
+- 4: Poor security history
+- 5: Known security vulnerabilities
+
+Protocol Risk Multipliers:
+- WiFi: 1.0 (standard risk)
+- BLE: 0.8 (lower risk due to shorter range)
+- Zigbee/Z-Wave: 0.7 (typically more secure protocols)
+- mDNS: 0.9 (service discovery protocol)
+- ARP: 0.6 (local network protocol)
+
+Dependencies:
+- iot_signatures.json: Device signatures and OUI database
+- typing: Type hints for better code documentation
+
+Author: CIVRADAR-X Development Team
+"""
+
 import json
 import os
 from typing import Dict, List, Any, Optional
 
+# Determine base directory for relative path resolution
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# Path to IoT signatures database
 DB_PATH = os.path.join(BASE_DIR, 'data', 'iot_signatures.json')
+
 
 class ThreatIntelligence:
     def __init__(self):

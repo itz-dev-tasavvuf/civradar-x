@@ -1,4 +1,41 @@
 #!/usr/bin/env python3
+"""
+Secure Export Functionality Test Module for CIVRADAR-X
+
+This module tests the secure export capabilities of the CIVRADAR-X system,
+validating ZIP creation, multiple format support, and encryption functionality.
+It ensures that intelligence data can be securely exported and shared while
+maintaining operational security.
+
+Test Coverage:
+- ZIP archive creation with multiple export formats
+- CSV, JSON, and GeoJSON format validation
+- Metadata file generation and content verification
+- Flask Response creation for web API integration
+- Export history logging functionality
+- Error handling and edge case management
+
+Export Formats Tested:
+- CSV: Spreadsheet-compatible tabular data
+- JSON: Structured data for programmatic processing
+- GeoJSON: Geospatial features for mapping applications
+- Metadata: Export information and system details
+
+Security Validation:
+- Data integrity during export process
+- Proper file handling and cleanup
+- Error logging without exposing sensitive information
+- API endpoint response formatting
+
+Test Data:
+- Simulated device discovery results
+- GPS coordinate data with accuracy metrics
+- Various device types and protocols
+- Realistic field operation scenarios
+
+Author: CIVRADAR-X Development Team
+License: MIT (Classified Operations)
+"""
 
 import sys
 import os

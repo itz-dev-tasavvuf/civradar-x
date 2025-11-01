@@ -1,3 +1,60 @@
+"""
+CIVRADAR-X Main Application Module
+
+This module serves as the primary entry point for the CIVRADAR-X civilian radar
+intelligence system. It provides a Flask-based web interface with real-time
+device scanning, OPSEC-enhanced security features, and comprehensive field
+operation capabilities.
+
+Key Features:
+- Real-time device discovery across multiple protocols (WiFi, BLE, mDNS, ARP)
+- Web-based radar visualization with live updates via WebSocket
+- OPSEC-enhanced security with encrypted logging and threat monitoring
+- Secure data export with multiple formats and encryption options
+- GPS integration with manual override capabilities
+- Stealth mode operation for low-visibility deployments
+- Emergency wipe and secure termination capabilities
+
+System Architecture:
+- Flask web framework for HTTP API endpoints
+- SocketIO for real-time client communication
+- Background scanning thread for continuous device discovery
+- OPSEC components for operational security and threat response
+- SQLite database for persistent device logging
+- Multi-protocol device fusion engine for intelligence correlation
+
+Security Features:
+- Session-based security with threat monitoring
+- Field operation modes (Normal, Stealth, Ghost, Emergency)
+- Secure data wiping and memory cleanup
+- Encrypted configuration and logging
+- Process hiding and network stealth capabilities
+
+API Endpoints:
+- /: Main web interface
+- /api/devices: Current device list (JSON)
+- /api/export/<fmt>: Data export (CSV, JSON, GeoJSON)
+- /api/export/secure: Encrypted secure export
+- /api/gps/*: GPS configuration and override
+- /api/stealth: Stealth mode control
+- /api/opsec/*: OPSEC system management
+
+Operational Modes:
+- Normal: Full functionality with logging
+- Stealth: Reduced activity, process hiding
+- Ghost: Maximum stealth, encrypted memory
+- Emergency: Crisis mode with auto-wipe
+
+Dependencies:
+- flask: Web framework
+- flask-socketio: Real-time communication
+- Core scanners: Device discovery modules
+- Intel modules: Security and intelligence features
+
+Author: CIVRADAR-X Development Team
+License: MIT (Classified Operations)
+"""
+
 from flask import Flask, render_template, jsonify, request
 from flask_socketio import SocketIO
 import threading

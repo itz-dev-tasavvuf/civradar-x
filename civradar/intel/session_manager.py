@@ -1,7 +1,45 @@
-# civradar/intel/session_manager.py
 """
-Secure Session Management for field operations with auto-wipe capabilities.
-Provides isolated sessions, threat-based auto-wipe, and secure session handling.
+Session Manager Module for CIVRADAR-X
+
+This module provides secure session management capabilities for field operations,
+implementing isolated sessions with threat-based auto-wipe functionality. It
+ensures operational security through session isolation, automatic cleanup, and
+threat-responsive security measures.
+
+Key Features:
+- Secure session creation with cryptographic isolation
+- Threat monitoring with automated response mechanisms
+- Auto-wipe functionality based on timeout and threat levels
+- Session activity tracking and idle detection
+- Process hiding and memory protection
+- Emergency wipe capabilities for crisis situations
+
+Session Security Features:
+- Session-specific encryption keys derived from multiple entropy sources
+- PBKDF2 key derivation with high iteration count (150,000)
+- Automatic session cleanup and resource reclamation
+- Threat level escalation with configurable thresholds
+- Process name obfuscation for operational security
+
+Threat Detection:
+- Suspicious process monitoring (forensic tools, sniffers)
+- Network surveillance detection
+- Resource anomaly monitoring (CPU, memory, disk I/O)
+- Forensic tool detection with signature matching
+
+Auto-Response Mechanisms:
+- Emergency wipe on critical threat detection
+- Security level increases for moderate threats
+- Monitoring frequency adjustments based on threat levels
+
+Session Lifecycle:
+1. Creation: Generate unique session ID and encryption keys
+2. Monitoring: Continuous threat detection and activity tracking
+3. Maintenance: Idle timeout handling and resource management
+4. Termination: Secure cleanup and data sanitization
+
+Author: CIVRADAR-X Development Team
+License: MIT (Classified Operations)
 """
 
 import secrets

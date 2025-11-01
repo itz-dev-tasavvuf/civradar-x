@@ -1,7 +1,52 @@
-# civradar/intel/field_ops.py
 """
-Field Operation Modes with Enhanced Stealth Capabilities.
-Provides operational modes for different threat environments and scenarios.
+Field Operations Module for CIVRADAR-X
+
+This module implements field operation modes with enhanced stealth capabilities
+for the CIVRADAR-X system. It provides adaptive operational profiles optimized
+for different threat environments, from standard operations to maximum stealth
+in hostile scenarios.
+
+Key Features:
+- Multiple operational modes (Normal, Stealth, Ghost, Emergency, etc.)
+- Adaptive stealth profiles based on threat environment
+- Real-time threat detection with automated response
+- Process and network obfuscation techniques
+- Hardware stealth capabilities (USB hiding, LED disabling)
+- Time-based operational constraints and auto-termination
+
+Operational Modes:
+- NORMAL: Standard operation with full logging and features
+- STEALTH: Minimal activity, passive scanning, process hiding
+- GHOST: Maximum stealth, no active logging, encrypted memory
+- EMERGENCY: Crisis mode with rapid data wipe capabilities
+- RECON: Intelligence gathering with Tor integration
+- COMBAT: High-threat environment with restricted communications
+- RADIO_SILENCE: Complete network inactivity
+- OFFLINE: Full offline operation with local processing
+
+Stealth Techniques:
+- Process name obfuscation (appearing as system processes)
+- Command line hiding and argument sanitization
+- Network port randomization and outbound blocking
+- Time stomping for file timestamp obfuscation
+- Fake log activity generation for pattern disruption
+- Hardware device hiding and LED disabling
+- MAC address randomization for network anonymity
+
+Threat Detection Integration:
+- Process signature matching for monitoring tools
+- Network anomaly detection (suspicious connections, ports)
+- Hardware monitoring (USB devices, wireless interfaces)
+- Filesystem activity monitoring for sensitive file access
+
+Auto-Response Mechanisms:
+- Mode switching based on threat severity
+- Emergency wipe triggers for critical threats
+- Security level escalation with increased monitoring
+- Backup wipe intervals for operational security
+
+Author: CIVRADAR-X Development Team
+License: MIT (Classified Operations)
 """
 
 import os
